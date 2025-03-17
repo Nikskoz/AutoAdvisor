@@ -1,0 +1,23 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# CORS middleware
+starlette>=0.36.0
+
+# Data validation
+pydantic>=2.6.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# OpenAI integration
+openai>=1.12.0
+tiktoken>=0.6.0  # For token counting
+
+# The following packages are built into Python and don't need to be installed:
+# logging
+# traceback
+# datetime
+# typing
+# re 
