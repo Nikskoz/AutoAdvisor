@@ -49,20 +49,25 @@ A sophisticated RAG (Retrieval-Augmented Generation) web application that helps 
 ```
 ├── src/                    # Frontend source code
 │   ├── components/         # React components
-│   │   ├── CarCard.tsx    # Car listing card component
-│   │   ├── SearchForm.tsx # Search form component
-│   │   └── ui/           # UI components
-│   ├── lib/               # Utilities and API clients
-│   │   ├── api.ts        # API client
-│   │   └── types.ts      # TypeScript types
-│   ├── pages/            # Page components
-│   └── hooks/            # Custom React hooks
-├── backend/              # Python backend
-│   ├── server.py        # Main FastAPI server
-│   ├── data/            # Database files
-│   └── .env            # Environment configuration
-├── public/              # Static assets
-└── package.json        # Frontend dependencies
+│   │   ├── CarCard.tsx     # Car listing card component
+│   │   ├── SearchForm.tsx  # Search form component
+│   │   ├── LoadingIndicator.tsx # Loading indicator component
+│   │   ├── car/            # Car-specific components
+│   │   └── ui/             # UI components from shadcn/ui
+│   ├── lib/                # Utilities and API clients
+│   │   ├── api.ts          # API client
+│   │   ├── types.ts        # TypeScript types
+│   │   └── utils.ts        # Utility functions
+│   ├── pages/              # Page components
+│   └── hooks/              # Custom React hooks
+├── backend/                # Python backend
+│   ├── server.py           # Main FastAPI server
+│   ├── data/               # Database files
+│   │   ├── car_listings.db # Car listings database
+│   │   └── bmw_cars.db     # BMW model information
+│   └── .env                # Environment configuration
+├── public/                 # Static assets
+└── package.json            # Frontend dependencies
 ```
 
 ## How It Works
@@ -89,29 +94,23 @@ A sophisticated RAG (Retrieval-Augmented Generation) web application that helps 
      - Fuel type matching
 
 ### 3. Match Score Calculation
-The match score is calculated based on multiple factors:
-1. **Price Match (30%)**:
-   - Calculates how well the price fits within the user's range
-   - Uses a linear scale for scoring
+The match score is calculated in two phases:
 
-2. **Mileage Match (20%)**:
-   - Evaluates mileage against user's preferred range
-   - Uses a logarithmic scale to account for high-mileage vehicles
-   - Considers the car's age in relation to mileage
+1. **Priority Score for Initial Filtering**:
+   - Used to select the top 50 listings from the initial search results
+   - Based on just two factors with equal weight (50% each):
+     - **Year**: Newer cars score higher on a linear scale
+     - **Mileage**: Lower mileage scores better using a logarithmic scale
+   - This score determines which listings proceed to detailed analysis
 
-3. **Model Match (20%)**:
-   - Based on the accuracy of model matching
-   - Considers production year compatibility
-   - Accounts for engine and fuel type matches
-
-4. **Features Match (15%)**:
-   - Evaluates available features against user preferences
-   - Considers optional equipment
-
-5. **Condition Match (15%)**:
-   - Based on technical inspection status
-   - Considers service history
-   - Evaluates overall condition
+2. **Match Score for Final Ranking**:
+   - Applied only to the top 50 listings from priority scoring
+   - Based on three weighted factors:
+     - **Price (40%)**: Lower prices within user's range score higher
+     - **Mileage (35%)**: Lower mileage scores better
+     - **Age/Year (25%)**: Newer models score higher
+   - Each factor takes user preferences into account when available
+   - Final score is presented as a percentage (30-100%)
 
 ### 4. AI Analysis
 The system uses OpenAI's GPT-4o-mini model to generate:
@@ -190,9 +189,14 @@ The system uses OpenAI's GPT-4o-mini model to generate:
 1. **Token Management**:
    - Maximum input tokens: 110,000
    - Maximum completion tokens: 16,000
-   - Uses tiktoken for token counting
+   - Uses tiktoken for token counting (with "gpt-4" encoding)
 
-2. **Prompt Structure**:
+2. **Model Configuration**:
+   - Model: gpt-4o-mini
+   - Temperature: 0.2
+   - No presence or frequency penalties
+
+3. **Prompt Structure**:
    ```json
    {
      "messages": [
@@ -202,32 +206,41 @@ The system uses OpenAI's GPT-4o-mini model to generate:
        },
        {
          "role": "user",
-         "content": {
-           "carDetails": {...},
-           "modelInfo": {...},
-           "userPreferences": {...}
-         }
+         "content": JSON.stringify(openai_data)
        }
      ]
    }
    ```
 
 #### OpenAI Response
-1. **Raw Response**:
+1. **Response Structure**:
+   - The OpenAI API returns analysis blocks for each listing
+   - Each analysis block contains a car ID and associated analysis
+
+2. **Analysis Format**:
    ```json
    {
-     "matchScore": number,
-     "strengths": ["string"],
-     "considerations": ["string"],
-     "valueAssessment": "string",
-     "recommendation": "string",
-     "commonProblems": "string",
-     "highMileageConcerns": "string",
-     "checklistItems": "string",
-     "comparison": "string",
-     "summary": "string"
+     "id": "car-id",
+     "analysis": {
+       "matchScore": number,
+       "strengths": ["string"] | "string",
+       "considerations": ["string"] | "string",
+       "valueAssessment": "string",
+       "recommendation": "string",
+       "commonProblems": "string",
+       "highMileageConcerns": "string",
+       "checklistItems": ["string"] | "string",
+       "comparison": "string",
+       "summary": "string"
+     }
    }
    ```
+
+3. **Processing**:
+   - Response is parsed to extract analysis blocks
+   - Data is cleaned and processed for frontend display
+   - Lists are standardized (ensuring arrays where expected)
+   - Fallbacks to model info when AI doesn't provide certain sections
 
 #### Frontend Processing
 1. **API Client** (`src/lib/api.ts`):
